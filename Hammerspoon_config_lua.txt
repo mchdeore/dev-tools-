@@ -9,31 +9,64 @@ local function focusedWin()
   return hs.window.focusedWindow()
 end
 
-local function round(n)
-  return math.floor(n + 0.5)
+local function clamp(n, minVal, maxVal)
+  if n < minVal then return minVal end
+  if n > maxVal then return maxVal end
+  return n
 end
 
+-- Build exact pixel boundaries for a grid.
+-- This avoids float drift and guarantees the grid spans the screen cleanly.
+local function makeBoundaries(startPos, totalSize, divisions)
+  local out = {}
+  for i = 0, divisions do
+    out[i] = math.floor(startPos + (totalSize * i / divisions) + 0.5)
+  end
+  return out
+end
+
+-- Find the nearest grid boundary index for a pixel coordinate.
+local function nearestBoundaryIndex(boundaries, value, maxIndex)
+  local bestIndex = 0
+  local bestDist = math.huge
+
+  for i = 0, maxIndex do
+    local d = math.abs(value - boundaries[i])
+    if d < bestDist then
+      bestDist = d
+      bestIndex = i
+    end
+  end
+
+  return bestIndex
+end
+
+-- Convert a window frame into grid coordinates by snapping all 4 edges.
 local function getGridFrame(win)
   local screen = win:screen():frame()
   local f = win:frame()
 
-  local cellW = screen.w / GRID_COLUMNS
-  local cellH = screen.h / GRID_ROWS
+  local xBounds = makeBoundaries(screen.x, screen.w, GRID_COLUMNS)
+  local yBounds = makeBoundaries(screen.y, screen.h, GRID_ROWS)
 
-  local gx = round((f.x - screen.x) / cellW)
-  local gy = round((f.y - screen.y) / cellH)
-  local gw = round(f.w / cellW)
-  local gh = round(f.h / cellH)
+  local left = nearestBoundaryIndex(xBounds, f.x, GRID_COLUMNS)
+  local right = nearestBoundaryIndex(xBounds, f.x + f.w, GRID_COLUMNS)
+  local top = nearestBoundaryIndex(yBounds, f.y, GRID_ROWS)
+  local bottom = nearestBoundaryIndex(yBounds, f.y + f.h, GRID_ROWS)
 
-  gx = math.max(0, math.min(GRID_COLUMNS - 1, gx))
-  gy = math.max(0, math.min(GRID_ROWS - 1, gy))
-  gw = math.max(1, math.min(GRID_COLUMNS - gx, gw))
-  gh = math.max(1, math.min(GRID_ROWS - gy, gh))
+  -- Ensure at least 1 cell in each dimension
+  if right <= left then right = math.min(GRID_COLUMNS, left + 1) end
+  if bottom <= top then bottom = math.min(GRID_ROWS, top + 1) end
+
+  local gx = clamp(left, 0, GRID_COLUMNS - 1)
+  local gy = clamp(top, 0, GRID_ROWS - 1)
+  local gw = clamp(right - gx, 1, GRID_COLUMNS - gx)
+  local gh = clamp(bottom - gy, 1, GRID_ROWS - gy)
 
   return {
     screen = screen,
-    cellW = cellW,
-    cellH = cellH,
+    xBounds = xBounds,
+    yBounds = yBounds,
     gx = gx,
     gy = gy,
     gw = gw,
@@ -42,52 +75,57 @@ local function getGridFrame(win)
 end
 
 local function applyGridFrame(win, g)
+  local x1 = g.xBounds[g.gx]
+  local x2 = g.xBounds[g.gx + g.gw]
+  local y1 = g.yBounds[g.gy]
+  local y2 = g.yBounds[g.gy + g.gh]
+
   win:setFrame({
-    x = g.screen.x + (g.gx * g.cellW),
-    y = g.screen.y + (g.gy * g.cellH),
-    w = g.gw * g.cellW,
-    h = g.gh * g.cellH
+    x = x1,
+    y = y1,
+    w = x2 - x1,
+    h = y2 - y1
   })
 end
 
--- Move window (grid-based)
+-- Move window by grid cells without changing size
 local function moveWindow(dx, dy)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
 
-  g.gx = math.max(0, math.min(GRID_COLUMNS - g.gw, g.gx + dx))
-  g.gy = math.max(0, math.min(GRID_ROWS - g.gh, g.gy + dy))
+  g.gx = clamp(g.gx + dx, 0, GRID_COLUMNS - g.gw)
+  g.gy = clamp(g.gy + dy, 0, GRID_ROWS - g.gh)
 
   applyGridFrame(win, g)
 end
 
--- Resize from RIGHT edge (stable)
+-- Resize from the RIGHT edge only
 local function resizeWidth(delta)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
 
-  g.gw = math.max(1, math.min(GRID_COLUMNS - g.gx, g.gw + delta))
+  g.gw = clamp(g.gw + delta, 1, GRID_COLUMNS - g.gx)
 
   applyGridFrame(win, g)
 end
 
--- Resize from BOTTOM edge (stable)
+-- Resize from the BOTTOM edge only
 local function resizeHeight(delta)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
 
-  g.gh = math.max(1, math.min(GRID_ROWS - g.gy, g.gh + delta))
+  g.gh = clamp(g.gh + delta, 1, GRID_ROWS - g.gy)
 
   applyGridFrame(win, g)
 end
 
--- Center window (grid-aligned)
+-- Center window while preserving size
 local function centerWindow()
   local win = focusedWin()
   if not win then return end
@@ -100,25 +138,55 @@ local function centerWindow()
   applyGridFrame(win, g)
 end
 
--- Maximize
+-- Fill screen exactly
 local function maximizeWindow()
   local win = focusedWin()
-  if win then win:maximize() end
+  if not win then return end
+
+  local g = getGridFrame(win)
+  g.gx = 0
+  g.gy = 0
+  g.gw = GRID_COLUMNS
+  g.gh = GRID_ROWS
+
+  applyGridFrame(win, g)
 end
 
--- Minimize
 local function minimizeWindow()
   local win = focusedWin()
   if win then win:minimize() end
 end
 
--- Move (infinite plane feel)
+-- Optional helpers for quick tiling
+local function leftHalf()
+  local win = focusedWin()
+  if not win then return end
+  local g = getGridFrame(win)
+  g.gx = 0
+  g.gy = 0
+  g.gw = 3
+  g.gh = GRID_ROWS
+  applyGridFrame(win, g)
+end
+
+local function rightHalf()
+  local win = focusedWin()
+  if not win then return end
+  local g = getGridFrame(win)
+  g.gx = 3
+  g.gy = 0
+  g.gw = 3
+  g.gh = GRID_ROWS
+  applyGridFrame(win, g)
+end
+
+-- Move
 hs.hotkey.bind(hyper, "Left", function() moveWindow(-1, 0) end)
 hs.hotkey.bind(hyper, "Right", function() moveWindow(1, 0) end)
 hs.hotkey.bind(hyper, "Up", function() moveWindow(0, -1) end)
 hs.hotkey.bind(hyper, "Down", function() moveWindow(0, 1) end)
 
--- Horizontal resize (swapped as requested)
+-- Horizontal resize
 hs.hotkey.bind(hyper, "/", function() resizeWidth(-1) end)   -- shrink
 hs.hotkey.bind(hyper, "'", function() resizeWidth(1) end)    -- grow
 
@@ -131,12 +199,25 @@ hs.hotkey.bind(hyper, "C", centerWindow)
 hs.hotkey.bind(hyper, "M", maximizeWindow)
 hs.hotkey.bind(hyper, "\\", minimizeWindow)
 
--- Move to next monitor
+-- Optional quick halves
+hs.hotkey.bind(hyper, "[", leftHalf)
+hs.hotkey.bind(hyper, "]", rightHalf)
+
+-- Move to next monitor and preserve approximate grid placement
 hs.hotkey.bind(hyper, "N", function()
   local win = focusedWin()
-  if win then
-    win:moveToScreen(win:screen():next())
-  end
+  if not win then return end
+
+  local oldGrid = getGridFrame(win)
+  local nextScreen = win:screen():next()
+  win:moveToScreen(nextScreen, false, true)
+
+  local newScreen = nextScreen:frame()
+  oldGrid.screen = newScreen
+  oldGrid.xBounds = makeBoundaries(newScreen.x, newScreen.w, GRID_COLUMNS)
+  oldGrid.yBounds = makeBoundaries(newScreen.y, newScreen.h, GRID_ROWS)
+
+  applyGridFrame(win, oldGrid)
 end)
 
 -- Launch Terminal
