@@ -5,9 +5,6 @@ hs.window.animationDuration = 0
 local GRID_COLUMNS = 6
 local GRID_ROWS = 6
 
-local MIN_W_UNITS = 1
-local MIN_H_UNITS = 1
-
 local function focusedWin()
   return hs.window.focusedWindow()
 end
@@ -30,8 +27,8 @@ local function getGridFrame(win)
 
   gx = math.max(0, math.min(GRID_COLUMNS - 1, gx))
   gy = math.max(0, math.min(GRID_ROWS - 1, gy))
-  gw = math.max(MIN_W_UNITS, math.min(GRID_COLUMNS - gx, gw))
-  gh = math.max(MIN_H_UNITS, math.min(GRID_ROWS - gy, gh))
+  gw = math.max(1, math.min(GRID_COLUMNS - gx, gw))
+  gh = math.max(1, math.min(GRID_ROWS - gy, gh))
 
   return {
     screen = screen,
@@ -53,98 +50,86 @@ local function applyGridFrame(win, g)
   })
 end
 
-local function moveWindow(dxUnits, dyUnits)
+-- Move window (grid-based)
+local function moveWindow(dx, dy)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
 
-  g.gx = math.max(0, math.min(GRID_COLUMNS - g.gw, g.gx + dxUnits))
-  g.gy = math.max(0, math.min(GRID_ROWS - g.gh, g.gy + dyUnits))
+  g.gx = math.max(0, math.min(GRID_COLUMNS - g.gw, g.gx + dx))
+  g.gy = math.max(0, math.min(GRID_ROWS - g.gh, g.gy + dy))
 
   applyGridFrame(win, g)
 end
 
-local function resizeWidth(deltaUnits)
+-- Resize from RIGHT edge (stable)
+local function resizeWidth(delta)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
-  local center = g.gx + (g.gw / 2)
 
-  local newGw = math.max(MIN_W_UNITS, math.min(GRID_COLUMNS, g.gw + deltaUnits))
-  local newGx = round(center - (newGw / 2))
-
-  newGx = math.max(0, math.min(GRID_COLUMNS - newGw, newGx))
-
-  g.gx = newGx
-  g.gw = newGw
+  g.gw = math.max(1, math.min(GRID_COLUMNS - g.gx, g.gw + delta))
 
   applyGridFrame(win, g)
 end
 
-local function resizeHeight(deltaUnits)
+-- Resize from BOTTOM edge (stable)
+local function resizeHeight(delta)
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
-  local center = g.gy + (g.gh / 2)
 
-  local newGh = math.max(MIN_H_UNITS, math.min(GRID_ROWS, g.gh + deltaUnits))
-  local newGy = round(center - (newGh / 2))
-
-  newGy = math.max(0, math.min(GRID_ROWS - newGh, newGy))
-
-  g.gy = newGy
-  g.gh = newGh
+  g.gh = math.max(1, math.min(GRID_ROWS - g.gy, g.gh + delta))
 
   applyGridFrame(win, g)
 end
 
+-- Center window (grid-aligned)
 local function centerWindow()
   local win = focusedWin()
   if not win then return end
 
   local g = getGridFrame(win)
+
   g.gx = math.floor((GRID_COLUMNS - g.gw) / 2)
   g.gy = math.floor((GRID_ROWS - g.gh) / 2)
+
   applyGridFrame(win, g)
 end
 
+-- Maximize
 local function maximizeWindow()
   local win = focusedWin()
-  if not win then return end
-  win:maximize()
+  if win then win:maximize() end
 end
 
--- Move window on the grid
+-- Minimize
+local function minimizeWindow()
+  local win = focusedWin()
+  if win then win:minimize() end
+end
+
+-- Move (infinite plane feel)
 hs.hotkey.bind(hyper, "Left", function() moveWindow(-1, 0) end)
 hs.hotkey.bind(hyper, "Right", function() moveWindow(1, 0) end)
 hs.hotkey.bind(hyper, "Up", function() moveWindow(0, -1) end)
 hs.hotkey.bind(hyper, "Down", function() moveWindow(0, 1) end)
 
--- Swapped controls:
--- Horizontal resize is now / and '
-hs.hotkey.bind(hyper, "/", function()
-  resizeWidth(-1) -- shrink width by 1/6
-end)
+-- Horizontal resize (swapped as requested)
+hs.hotkey.bind(hyper, "/", function() resizeWidth(-1) end)   -- shrink
+hs.hotkey.bind(hyper, "'", function() resizeWidth(1) end)    -- grow
 
-hs.hotkey.bind(hyper, "'", function()
-  resizeWidth(1) -- grow width by 1/6
-end)
+-- Vertical resize
+hs.hotkey.bind(hyper, ".", function() resizeHeight(-1) end)  -- shrink
+hs.hotkey.bind(hyper, ";", function() resizeHeight(1) end)   -- grow
 
--- Vertical resize is now . and ;
-hs.hotkey.bind(hyper, ".", function()
-  resizeHeight(-1) -- shrink height by 1/6
-end)
-
-hs.hotkey.bind(hyper, ";", function()
-  resizeHeight(1) -- grow height by 1/6
-end)
-
--- Center + maximize
+-- Core controls
 hs.hotkey.bind(hyper, "C", centerWindow)
 hs.hotkey.bind(hyper, "M", maximizeWindow)
+hs.hotkey.bind(hyper, "\\", minimizeWindow)
 
 -- Move to next monitor
 hs.hotkey.bind(hyper, "N", function()
