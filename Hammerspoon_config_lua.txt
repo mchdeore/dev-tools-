@@ -1,72 +1,160 @@
 local hyper = {"ctrl", "alt", "cmd"}
 
-hs.loadSpoon("MiroWindowsManager")
-
-spoon.MiroWindowsManager.sizes = {2, 3, 4, 6}
 hs.window.animationDuration = 0
 
-spoon.MiroWindowsManager:bindHotkeys({
-  right = { hyper, "Right" },
-  left = { hyper, "Left" },
-  up = { hyper, "Up" },
-  down = { hyper, "Down" },
-  fullscreen = { hyper, "F" }
-})
+local GRID_COLUMNS = 6
+local GRID_ROWS = 6
 
--- Maximize window
-hs.hotkey.bind(hyper, "M", function()
-  local win = hs.window.focusedWindow()
-  if win then
-    win:maximize()
-  end
-end)
+local MIN_W_UNITS = 1
+local MIN_H_UNITS = 1
 
--- Center window
-hs.hotkey.bind(hyper, "C", function()
-  local win = hs.window.focusedWindow()
+local function focusedWin()
+  return hs.window.focusedWindow()
+end
+
+local function round(n)
+  return math.floor(n + 0.5)
+end
+
+local function getGridFrame(win)
+  local screen = win:screen():frame()
+  local f = win:frame()
+
+  local cellW = screen.w / GRID_COLUMNS
+  local cellH = screen.h / GRID_ROWS
+
+  local gx = round((f.x - screen.x) / cellW)
+  local gy = round((f.y - screen.y) / cellH)
+  local gw = round(f.w / cellW)
+  local gh = round(f.h / cellH)
+
+  gx = math.max(0, math.min(GRID_COLUMNS - 1, gx))
+  gy = math.max(0, math.min(GRID_ROWS - 1, gy))
+  gw = math.max(MIN_W_UNITS, math.min(GRID_COLUMNS - gx, gw))
+  gh = math.max(MIN_H_UNITS, math.min(GRID_ROWS - gy, gh))
+
+  return {
+    screen = screen,
+    cellW = cellW,
+    cellH = cellH,
+    gx = gx,
+    gy = gy,
+    gw = gw,
+    gh = gh
+  }
+end
+
+local function applyGridFrame(win, g)
+  win:setFrame({
+    x = g.screen.x + (g.gx * g.cellW),
+    y = g.screen.y + (g.gy * g.cellH),
+    w = g.gw * g.cellW,
+    h = g.gh * g.cellH
+  })
+end
+
+local function moveWindow(dxUnits, dyUnits)
+  local win = focusedWin()
   if not win then return end
 
-  local f = win:frame()
-  local screen = win:screen():frame()
+  local g = getGridFrame(win)
 
-  f.w = screen.w * 0.6
-  f.h = screen.h * 0.7
-  f.x = screen.x + (screen.w - f.w) / 2
-  f.y = screen.y + (screen.h - f.h) / 2
+  g.gx = math.max(0, math.min(GRID_COLUMNS - g.gw, g.gx + dxUnits))
+  g.gy = math.max(0, math.min(GRID_ROWS - g.gh, g.gy + dyUnits))
 
-  win:setFrame(f)
+  applyGridFrame(win, g)
+end
+
+local function resizeWidth(deltaUnits)
+  local win = focusedWin()
+  if not win then return end
+
+  local g = getGridFrame(win)
+  local center = g.gx + (g.gw / 2)
+
+  local newGw = math.max(MIN_W_UNITS, math.min(GRID_COLUMNS, g.gw + deltaUnits))
+  local newGx = round(center - (newGw / 2))
+
+  newGx = math.max(0, math.min(GRID_COLUMNS - newGw, newGx))
+
+  g.gx = newGx
+  g.gw = newGw
+
+  applyGridFrame(win, g)
+end
+
+local function resizeHeight(deltaUnits)
+  local win = focusedWin()
+  if not win then return end
+
+  local g = getGridFrame(win)
+  local center = g.gy + (g.gh / 2)
+
+  local newGh = math.max(MIN_H_UNITS, math.min(GRID_ROWS, g.gh + deltaUnits))
+  local newGy = round(center - (newGh / 2))
+
+  newGy = math.max(0, math.min(GRID_ROWS - newGh, newGy))
+
+  g.gy = newGy
+  g.gh = newGh
+
+  applyGridFrame(win, g)
+end
+
+local function centerWindow()
+  local win = focusedWin()
+  if not win then return end
+
+  local g = getGridFrame(win)
+  g.gx = math.floor((GRID_COLUMNS - g.gw) / 2)
+  g.gy = math.floor((GRID_ROWS - g.gh) / 2)
+  applyGridFrame(win, g)
+end
+
+local function maximizeWindow()
+  local win = focusedWin()
+  if not win then return end
+  win:maximize()
+end
+
+-- Move window on the grid
+hs.hotkey.bind(hyper, "Left", function() moveWindow(-1, 0) end)
+hs.hotkey.bind(hyper, "Right", function() moveWindow(1, 0) end)
+hs.hotkey.bind(hyper, "Up", function() moveWindow(0, -1) end)
+hs.hotkey.bind(hyper, "Down", function() moveWindow(0, 1) end)
+
+-- Swapped controls:
+-- Horizontal resize is now / and '
+hs.hotkey.bind(hyper, "/", function()
+  resizeWidth(-1) -- shrink width by 1/6
 end)
+
+hs.hotkey.bind(hyper, "'", function()
+  resizeWidth(1) -- grow width by 1/6
+end)
+
+-- Vertical resize is now . and ;
+hs.hotkey.bind(hyper, ".", function()
+  resizeHeight(-1) -- shrink height by 1/6
+end)
+
+hs.hotkey.bind(hyper, ";", function()
+  resizeHeight(1) -- grow height by 1/6
+end)
+
+-- Center + maximize
+hs.hotkey.bind(hyper, "C", centerWindow)
+hs.hotkey.bind(hyper, "M", maximizeWindow)
 
 -- Move to next monitor
 hs.hotkey.bind(hyper, "N", function()
-  local win = hs.window.focusedWindow()
+  local win = focusedWin()
   if win then
     win:moveToScreen(win:screen():next())
   end
 end)
 
--- Slide window horizontally by one sixth
-local function nudgeWindow(dx)
-  local win = hs.window.focusedWindow()
-  if not win then return end
-
-  local f = win:frame()
-  local screen = win:screen():frame()
-  local step = screen.w / 6
-
-  f.x = f.x + (step * dx)
-  win:setFrame(f)
-end
-
-hs.hotkey.bind(hyper, "J", function()
-  nudgeWindow(-1)
-end)
-
-hs.hotkey.bind(hyper, "K", function()
-  nudgeWindow(1)
-end)
-
--- Launch apps
+-- Launch Terminal
 hs.hotkey.bind(hyper, "T", function()
   hs.application.launchOrFocus("Terminal")
 end)
