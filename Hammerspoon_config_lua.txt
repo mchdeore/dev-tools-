@@ -107,60 +107,52 @@ local function maximizeWindow()
 end
 
 --------------------------------
--- HOTKEYS  (hyper = ctrl+alt+cmd)
---
--- Right-hand keyboard reference:
---   [ ] \          top
---   l ; '  Enter   home
---   , .            bottom
---
--- Focus — arrows (natural direction, all 4 ways)
---   ← →    left / right in the strip
---   ↑ ↓    up / down in a column stack
---
--- Resize width — bottom row  (, .)
---   ,      narrower   (whole column if stacked)
---   .      wider      (whole column if stacked)
---
--- Swap — home row  (l ;)
---   l      swap left in strip
---   ;      swap right in strip
---
--- Column stacking — top row  ([ ])
---   [      slurp  (pull neighbor into column)
---   ]      barf   (push bottom window out)
---
--- Layout — scattered singletons
---   '      center window
---   return maximize
---   \      toggle floating
+-- HOTKEYS
 --------------------------------
 
--- Focus (arrows)
+-- Focus left/right only
 hs.hotkey.bind(hyper, "Left", function()
   paper.focus_left()
   paper.center_window()
 end)
+
 hs.hotkey.bind(hyper, "Right", function()
   paper.focus_right()
   paper.center_window()
 end)
-hs.hotkey.bind(hyper, "Up", function() paper.focus_up() end)
-hs.hotkey.bind(hyper, "Down", function() paper.focus_down() end)
 
--- Resize width (neighbors adjust; whole column resizes together)
-hs.hotkey.bind(hyper, ",", function() paper.decrease_width() end)
-hs.hotkey.bind(hyper, ".", function() paper.increase_width() end)
+-- Resize width (Up = bigger, Down = smaller)
+hs.hotkey.bind(hyper, "Up", function()
+  paper.increase_width()
+end)
 
--- Swap position in strip
-hs.hotkey.bind(hyper, "l", function() paper.swap_left() end)
-hs.hotkey.bind(hyper, ";", function() paper.swap_right() end)
+hs.hotkey.bind(hyper, "Down", function()
+  paper.decrease_width()
+end)
 
--- Column stacking (slurp pulls right neighbor in, barf pushes bottom out)
-hs.hotkey.bind(hyper, "[", function() paper.slurp_in() end)
-hs.hotkey.bind(hyper, "]", function() paper.barf_out() end)
+-- Swap left/right
+hs.hotkey.bind(hyper, ".", function()
+  paper.swap_right()
+end)
+
+hs.hotkey.bind(hyper, "/", function()
+  paper.swap_left()
+end)
 
 -- Layout
-hs.hotkey.bind(hyper, "'", centerWindow)
+hs.hotkey.bind(hyper, ",", centerWindow)
 hs.hotkey.bind(hyper, "return", maximizeWindow)
-hs.hotkey.bind(hyper, "\\", function() paper.toggle_floating() end)
+hs.hotkey.bind(hyper, "\\", function()
+  paper.toggle_floating()
+end)
+
+-- Stack / unstack (swapped)
+-- ; = merge right
+-- ' = spit out
+hs.hotkey.bind(hyper, ";", function()
+  paper.slurp_in()
+end)
+
+hs.hotkey.bind(hyper, "'", function()
+  paper.barf_out()
+end)
