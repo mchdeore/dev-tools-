@@ -1,1 +1,166 @@
+pcall(hs.ipc.cliInstall)
+
+--------------------------------
+-- BASICS
+--------------------------------
+hs.window.animationDuration = 0.12
+
+local hyper = {"ctrl", "alt", "cmd"}
 local GRID_COLUMNS = 6
+local GRID_ROWS = 6
+
+--------------------------------
+-- PAPERWM
+--------------------------------
+PaperWM = hs.loadSpoon("PaperWM")
+PaperWM:bindHotkeys({})
+PaperWM:start()
+local paper = PaperWM.actions.actions()
+
+--------------------------------
+-- GRID HELPERS (center + maximize)
+--------------------------------
+local function focusedWin()
+  return hs.window.focusedWindow()
+end
+
+local function clamp(n, minVal, maxVal)
+  if n < minVal then return minVal end
+  if n > maxVal then return maxVal end
+  return n
+end
+
+local function makeBoundaries(startPos, totalSize, divisions)
+  local out = {}
+  for i = 0, divisions do
+    out[i] = math.floor(startPos + (totalSize * i / divisions) + 0.5)
+  end
+  return out
+end
+
+local function nearestBoundaryIndex(boundaries, value, maxIndex)
+  local bestIndex = 0
+  local bestDist = math.huge
+  for i = 0, maxIndex do
+    local d = math.abs(value - boundaries[i])
+    if d < bestDist then
+      bestDist = d
+      bestIndex = i
+    end
+  end
+  return bestIndex
+end
+
+local function getGridFrame(win)
+  local screen = win:screen():frame()
+  local f = win:frame()
+
+  local xBounds = makeBoundaries(screen.x, screen.w, GRID_COLUMNS)
+  local yBounds = makeBoundaries(screen.y, screen.h, GRID_ROWS)
+
+  local left = nearestBoundaryIndex(xBounds, f.x, GRID_COLUMNS)
+  local right = nearestBoundaryIndex(xBounds, f.x + f.w, GRID_COLUMNS)
+  local top = nearestBoundaryIndex(yBounds, f.y, GRID_ROWS)
+  local bottom = nearestBoundaryIndex(yBounds, f.y + f.h, GRID_ROWS)
+
+  if right <= left then right = math.min(GRID_COLUMNS, left + 1) end
+  if bottom <= top then bottom = math.min(GRID_ROWS, top + 1) end
+
+  return {
+    screen = screen,
+    xBounds = xBounds,
+    yBounds = yBounds,
+    gx = clamp(left, 0, GRID_COLUMNS - 1),
+    gy = clamp(top, 0, GRID_ROWS - 1),
+    gw = clamp(right - left, 1, GRID_COLUMNS - left),
+    gh = clamp(bottom - top, 1, GRID_ROWS - top)
+  }
+end
+
+local function applyGridFrame(win, g)
+  win:setFrame({
+    x = g.xBounds[g.gx],
+    y = g.yBounds[g.gy],
+    w = g.xBounds[g.gx + g.gw] - g.xBounds[g.gx],
+    h = g.yBounds[g.gy + g.gh] - g.yBounds[g.gy]
+  })
+end
+
+local function centerWindow()
+  local win = focusedWin()
+  if not win then return end
+  local g = getGridFrame(win)
+  g.gx = math.floor((GRID_COLUMNS - g.gw) / 2)
+  g.gy = math.floor((GRID_ROWS - g.gh) / 2)
+  applyGridFrame(win, g)
+end
+
+local function maximizeWindow()
+  local win = focusedWin()
+  if not win then return end
+  local g = getGridFrame(win)
+  g.gx = 0
+  g.gy = 0
+  g.gw = GRID_COLUMNS
+  g.gh = GRID_ROWS
+  applyGridFrame(win, g)
+end
+
+--------------------------------
+-- HOTKEYS  (hyper = ctrl+alt+cmd)
+--
+-- Right-hand keyboard reference:
+--   [ ] \          top
+--   l ; '  Enter   home
+--   , .            bottom
+--
+-- Focus — arrows (natural direction, all 4 ways)
+--   ← →    left / right in the strip
+--   ↑ ↓    up / down in a column stack
+--
+-- Resize width — bottom row  (, .)
+--   ,      narrower   (whole column if stacked)
+--   .      wider      (whole column if stacked)
+--
+-- Swap — home row  (l ;)
+--   l      swap left in strip
+--   ;      swap right in strip
+--
+-- Column stacking — top row  ([ ])
+--   [      slurp  (pull neighbor into column)
+--   ]      barf   (push bottom window out)
+--
+-- Layout — scattered singletons
+--   '      center window
+--   return maximize
+--   \      toggle floating
+--------------------------------
+
+-- Focus (arrows)
+hs.hotkey.bind(hyper, "Left", function()
+  paper.focus_left()
+  paper.center_window()
+end)
+hs.hotkey.bind(hyper, "Right", function()
+  paper.focus_right()
+  paper.center_window()
+end)
+hs.hotkey.bind(hyper, "Up", function() paper.focus_up() end)
+hs.hotkey.bind(hyper, "Down", function() paper.focus_down() end)
+
+-- Resize width (neighbors adjust; whole column resizes together)
+hs.hotkey.bind(hyper, ",", function() paper.decrease_width() end)
+hs.hotkey.bind(hyper, ".", function() paper.increase_width() end)
+
+-- Swap position in strip
+hs.hotkey.bind(hyper, "l", function() paper.swap_left() end)
+hs.hotkey.bind(hyper, ";", function() paper.swap_right() end)
+
+-- Column stacking (slurp pulls right neighbor in, barf pushes bottom out)
+hs.hotkey.bind(hyper, "[", function() paper.slurp_in() end)
+hs.hotkey.bind(hyper, "]", function() paper.barf_out() end)
+
+-- Layout
+hs.hotkey.bind(hyper, "'", centerWindow)
+hs.hotkey.bind(hyper, "return", maximizeWindow)
+hs.hotkey.bind(hyper, "\\", function() paper.toggle_floating() end)
