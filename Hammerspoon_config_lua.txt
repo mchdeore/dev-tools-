@@ -110,7 +110,7 @@ end
 -- HOTKEYS
 --------------------------------
 
--- Focus left/right only
+-- Focus left/right
 hs.hotkey.bind(hyper, "Left", function()
   paper.focus_left()
   paper.center_window()
@@ -121,7 +121,7 @@ hs.hotkey.bind(hyper, "Right", function()
   paper.center_window()
 end)
 
--- Resize width (Up = bigger, Down = smaller)
+-- Resize width
 hs.hotkey.bind(hyper, "Up", function()
   paper.increase_width()
 end)
@@ -130,13 +130,13 @@ hs.hotkey.bind(hyper, "Down", function()
   paper.decrease_width()
 end)
 
--- Swap left/right
+-- 🔄 Swap (FIXED)
 hs.hotkey.bind(hyper, ".", function()
-  paper.swap_right()
+  paper.swap_left()
 end)
 
 hs.hotkey.bind(hyper, "/", function()
-  paper.swap_left()
+  paper.swap_right()
 end)
 
 -- Layout
@@ -146,9 +146,7 @@ hs.hotkey.bind(hyper, "\\", function()
   paper.toggle_floating()
 end)
 
--- Stack / unstack (swapped)
--- ; = merge right
--- ' = spit out
+-- Stack / unstack
 hs.hotkey.bind(hyper, ";", function()
   paper.slurp_in()
 end)
