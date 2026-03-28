@@ -78,11 +78,13 @@ local function getGridFrame(win)
 end
 
 local function applyGridFrame(win, g)
+  local fullScreen = win:screen():fullFrame()
+
   win:setFrame({
     x = g.xBounds[g.gx],
-    y = g.yBounds[g.gy],
+    y = fullScreen.y - 40,
     w = g.xBounds[g.gx + g.gw] - g.xBounds[g.gx],
-    h = g.yBounds[g.gy + g.gh] - g.yBounds[g.gy]
+    h = fullScreen.h + 40
   })
 end
 
