@@ -1,158 +1,31 @@
 pcall(hs.ipc.cliInstall)
 
---------------------------------
--- BASICS
---------------------------------
-hs.window.animationDuration = 0.12
+hs.window.animationDuration = 0.15
 
 local hyper = {"ctrl", "alt", "cmd"}
-local GRID_COLUMNS = 6
-local GRID_ROWS = 6
 
---------------------------------
--- PAPERWM
---------------------------------
 PaperWM = hs.loadSpoon("PaperWM")
-PaperWM:bindHotkeys({})
+PaperWM.window_gap = 0
+PaperWM.window_ratios = { 1/4, 1/3, 1/2, 2/3, 3/4 }
+
+PaperWM:bindHotkeys({
+  focus_left          = {hyper, "Left"},
+  focus_right         = {hyper, "Right"},
+
+  swap_left           = {hyper, "."},
+  swap_right          = {hyper, "/"},
+
+  cycle_width         = {hyper, "Up"},
+  reverse_cycle_width = {hyper, "Down"},
+
+  full_width          = {hyper, "return"},
+  center_window       = {hyper, "c"},
+  toggle_floating     = {hyper, "\\"},
+  slurp_in            = {hyper, ";"},
+  barf_out            = {hyper, "'"},
+})
+
 PaperWM:start()
-local paper = PaperWM.actions.actions()
 
---------------------------------
--- GRID HELPERS (center + maximize)
---------------------------------
-local function focusedWin()
-  return hs.window.focusedWindow()
-end
-
-local function clamp(n, minVal, maxVal)
-  if n < minVal then return minVal end
-  if n > maxVal then return maxVal end
-  return n
-end
-
-local function makeBoundaries(startPos, totalSize, divisions)
-  local out = {}
-  for i = 0, divisions do
-    out[i] = math.floor(startPos + (totalSize * i / divisions) + 0.5)
-  end
-  return out
-end
-
-local function nearestBoundaryIndex(boundaries, value, maxIndex)
-  local bestIndex = 0
-  local bestDist = math.huge
-  for i = 0, maxIndex do
-    local d = math.abs(value - boundaries[i])
-    if d < bestDist then
-      bestDist = d
-      bestIndex = i
-    end
-  end
-  return bestIndex
-end
-
-local function getGridFrame(win)
-  local screen = win:screen():frame()
-  local f = win:frame()
-
-  local xBounds = makeBoundaries(screen.x, screen.w, GRID_COLUMNS)
-  local yBounds = makeBoundaries(screen.y, screen.h, GRID_ROWS)
-
-  local left = nearestBoundaryIndex(xBounds, f.x, GRID_COLUMNS)
-  local right = nearestBoundaryIndex(xBounds, f.x + f.w, GRID_COLUMNS)
-  local top = nearestBoundaryIndex(yBounds, f.y, GRID_ROWS)
-  local bottom = nearestBoundaryIndex(yBounds, f.y + f.h, GRID_ROWS)
-
-  if right <= left then right = math.min(GRID_COLUMNS, left + 1) end
-  if bottom <= top then bottom = math.min(GRID_ROWS, top + 1) end
-
-  return {
-    screen = screen,
-    xBounds = xBounds,
-    yBounds = yBounds,
-    gx = clamp(left, 0, GRID_COLUMNS - 1),
-    gy = clamp(top, 0, GRID_ROWS - 1),
-    gw = clamp(right - left, 1, GRID_COLUMNS - left),
-    gh = clamp(bottom - top, 1, GRID_ROWS - top)
-  }
-end
-
-local function applyGridFrame(win, g)
-  local fullScreen = win:screen():fullFrame()
-
-  win:setFrame({
-    x = g.xBounds[g.gx],
-    y = fullScreen.y - 40,
-    w = g.xBounds[g.gx + g.gw] - g.xBounds[g.gx],
-    h = fullScreen.h + 40
-  })
-end
-
-local function centerWindow()
-  local win = focusedWin()
-  if not win then return end
-  local g = getGridFrame(win)
-  g.gx = math.floor((GRID_COLUMNS - g.gw) / 2)
-  g.gy = math.floor((GRID_ROWS - g.gh) / 2)
-  applyGridFrame(win, g)
-end
-
-local function maximizeWindow()
-  local win = focusedWin()
-  if not win then return end
-  local g = getGridFrame(win)
-  g.gx = 0
-  g.gy = 0
-  g.gw = GRID_COLUMNS
-  g.gh = GRID_ROWS
-  applyGridFrame(win, g)
-end
-
---------------------------------
--- HOTKEYS
---------------------------------
-
--- Focus left/right
-hs.hotkey.bind(hyper, "Left", function()
-  paper.focus_left()
-  paper.center_window()
-end)
-
-hs.hotkey.bind(hyper, "Right", function()
-  paper.focus_right()
-  paper.center_window()
-end)
-
--- Resize width
-hs.hotkey.bind(hyper, "Up", function()
-  paper.increase_width()
-end)
-
-hs.hotkey.bind(hyper, "Down", function()
-  paper.decrease_width()
-end)
-
--- 🔄 Swap (FIXED)
-hs.hotkey.bind(hyper, ".", function()
-  paper.swap_left()
-end)
-
-hs.hotkey.bind(hyper, "/", function()
-  paper.swap_right()
-end)
-
--- Layout
-hs.hotkey.bind(hyper, ",", centerWindow)
-hs.hotkey.bind(hyper, "return", maximizeWindow)
-hs.hotkey.bind(hyper, "\\", function()
-  paper.toggle_floating()
-end)
-
--- Stack / unstack
-hs.hotkey.bind(hyper, ";", function()
-  paper.slurp_in()
-end)
-
-hs.hotkey.bind(hyper, "'", function()
-  paper.barf_out()
-end)
+hs.hotkey.bind(hyper, "R", function() hs.reload() end)
+hs.alert.show("Config loaded")
